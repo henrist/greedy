@@ -24,8 +24,13 @@ static volatile int sockfd, total = 0, last = 0;
 static char type[8] = "unknown";
 
 int new_tcp = 0;
+int verbose = 0;
 
 struct utsname unamedata;
+
+void int_handler(int dummy) {
+    exit_program = 1;
+}
 
 void init() {
     struct utsname unamedata;
@@ -36,10 +41,8 @@ void init() {
             new_tcp = 1;
         }
     }
-}
 
-void int_handler(int dummy) {
-    exit_program = 1;
+    signal(SIGINT, int_handler);
 }
 
 void generate_status()
