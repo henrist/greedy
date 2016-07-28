@@ -165,7 +165,7 @@ void get_bytes_format(long long value, struct bytes_report *br, int align) {
         strcpy(br->suffix, "B");
 
         if (align > 0) {
-            sprintf(fmt, "%%%d.0f      %%s", align-7);
+            sprintf(fmt, "%%%d.0f       %%s", align-8);
         } else {
             sprintf(fmt, "%%.0f %%s");
         }
