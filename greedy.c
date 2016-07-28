@@ -16,10 +16,15 @@
 #define DEFAULT_REPORT_MS 100
 #define DEFAULT_BUF_SIZE 4096
 
+
 char *buffer;
 int buffer_size = DEFAULT_BUF_SIZE;
 int exit_program = 0;
 char *hostname;
+int keep_running = 0;
+int listen_sockfd = -1;
+int log_running = 0;
+pthread_t log_thread;
 enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
 int new_tcp = 0;
 int portno;
@@ -31,6 +36,11 @@ void logging_thread_run(void *arg);
 
 void int_handler(int dummy) {
     exit_program = 1;
+
+    if (listen_sockfd != -1) {
+        close(listen_sockfd);
+        listen_sockfd = -1;
+    }
 }
 
 void print_usage(char *argv[]) {
@@ -39,6 +49,7 @@ void print_usage(char *argv[]) {
         "Usage server: %s -s <port>\n"
         "Options:\n"
         "  -b n  buffer size in bytes to read/write call (default: %d)\n"
+        "  -r    keep server running when client disconnect\n"
         "  -t n  report every n milliseconds, implies -vvv (default: %d)\n"
         "  -v    verbose output (more verbose if multiple -v)\n",
         argv[0],
@@ -50,10 +61,13 @@ void print_usage(char *argv[]) {
 void parse_arg(int argc, char *argv[]) {
     int opt;
 
-    while ((opt = getopt(argc, argv, "b:st:v")) != -1) {
+    while ((opt = getopt(argc, argv, "b:rst:v")) != -1) {
         switch (opt) {
             case 'b':
                 buffer_size = atoi(optarg);
+                break;
+            case 'r':
+                keep_running = 1;
                 break;
             case 's':
                 mode = MODE_SERVER;
@@ -87,9 +101,19 @@ void parse_arg(int argc, char *argv[]) {
 }
 
 void start_logger(int sockfd) {
-    pthread_t log_thread;
     int pret;
     pret = pthread_create(&log_thread, NULL, (void *) &logging_thread_run, &sockfd);
+    if (pret != 0) {
+        fprintf(stderr, "Could not create logging thread\n");
+    } else {
+        log_running = 1;
+    }
+}
+
+void stop_logger() {
+    if (log_running) {
+        pthread_cancel(log_thread);
+    }
 }
 
 void set_tcp_nodelay(int sockfd) {
@@ -97,6 +121,14 @@ void set_tcp_nodelay(int sockfd) {
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *) &enable, sizeof(enable)) < 0) {
         fprintf(stderr, "setsockopt(TCP_NODELAY) failed");
         exit(1);
+    }
+}
+
+void report_closed() {
+    if (total_bytes > 0) {
+        printf("finished, a total number of %d kbytes was %s\n",
+            total_bytes/1024,
+            mode == MODE_SERVER ? "written" : "read");
     }
 }
 
@@ -143,7 +175,7 @@ void run_client() {
     } while (read_bytes > 0 && !exit_program);
 
     if (verbose) {
-        printf("finished, a total number of %d kbytes was read\n", total_bytes/1024);
+        report_closed();
     }
 
     close(sockfd);
@@ -152,7 +184,6 @@ void run_client() {
 void run_server() {
     struct sockaddr_in cli_addr;
     int clilen;
-    int listen_sockfd;
     struct sockaddr_in serv_addr;
     int sockfd;
     int wrote_bytes;
@@ -179,42 +210,52 @@ void run_server() {
         exit(1);
     }
 
-    if (verbose) {
-        printf("waiting for client to connect\n");
-    }
-
     listen(listen_sockfd, 5);
-
     clilen = sizeof(cli_addr);
-    sockfd = accept(listen_sockfd, (struct sockaddr *) &cli_addr, &clilen);
-    if (sockfd < 0) {
-        fprintf(stderr, "Error accepting socket\n");
-        exit(1);
-    }
 
-    set_tcp_nodelay(sockfd);
-
-    if (verbose >= 2) {
-        start_logger(sockfd);
-    }
-
-    //bzero(buffer, buffer_size);
     do {
-        wrote_bytes = write(sockfd, buffer, buffer_size);
-        if (verbose >= 3) {
-            printf(".");
+        if (verbose) {
+            printf("waiting for client to connect\n");
         }
 
-        if (wrote_bytes > 0) {
-            total_bytes += wrote_bytes;
+        sockfd = accept(listen_sockfd, (struct sockaddr *) &cli_addr, &clilen);
+        if (exit_program) {
+            return;
         }
-    } while (wrote_bytes > 0 && !exit_program);
+        if (sockfd < 0) {
+            fprintf(stderr, "Error accepting socket\n");
+            exit(1);
+        }
 
-    if (verbose) {
-        printf("finished, a total number of %d kbytes was written\n", total_bytes/1024);
+        set_tcp_nodelay(sockfd);
+
+        if (verbose >= 2) {
+            start_logger(sockfd);
+        }
+
+        //bzero(buffer, buffer_size);
+        do {
+            wrote_bytes = write(sockfd, buffer, buffer_size);
+            if (verbose >= 3) {
+                printf(".");
+            }
+
+            if (wrote_bytes > 0) {
+                total_bytes += wrote_bytes;
+            }
+        } while (wrote_bytes > 0 && !exit_program);
+
+        if (verbose) {
+            report_closed();
+        }
+
+        stop_logger();
+        close(sockfd);
+    } while (keep_running && !exit_program);
+
+    if (listen_sockfd != -1) {
+        close(listen_sockfd);
     }
-
-    close(sockfd);
 }
 
 void detect_new_tcp() {
