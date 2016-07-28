@@ -139,21 +139,21 @@ void get_bytes_format(long long value, struct bytes_report *br, int align) {
     if (br->val > 1024) {
         if (br->val > 1024) {
             br->val /= 1024;
-            strcpy(br->suffix, "kb");
+            strcpy(br->suffix, "KiB");
         }
 
         if (br->val > 1024) {
             br->val /= 1024;
-            strcpy(br->suffix, "mb");
+            strcpy(br->suffix, "MiB");
         }
 
         if (br->val > 1024) {
             br->val /= 1024;
-            strcpy(br->suffix, "gb");
+            strcpy(br->suffix, "GiB");
         }
 
         if (align > 0) {
-            sprintf(fmt, "%%%d.3f %%s", align-3);
+            sprintf(fmt, "%%%d.3f %%s", align-4);
         } else {
             sprintf(fmt, "%%.3f %%s");
         }
@@ -162,7 +162,7 @@ void get_bytes_format(long long value, struct bytes_report *br, int align) {
     }
 
     else {
-        strcpy(br->suffix, "b");
+        strcpy(br->suffix, "B");
 
         if (align > 0) {
             sprintf(fmt, "%%%d.0f      %%s", align-7);
@@ -377,7 +377,7 @@ void logging_thread_run(void *arg)
 
         int in_flight = info.tcpi_unacked - (info.tcpi_sacked + info.tcpi_lost) + info.tcpi_retrans;
 
-        get_bytes_format(total_bytes-last, &br, 10);
+        get_bytes_format(total_bytes-last, &br, 12);
 
         printf("%-5s %s, in_flight=%8d p, lost=%5d, snd_cwnd=%8d, notsent_bytes=%8d\n",
             mode == MODE_SERVER ? "wrote" : "read",
