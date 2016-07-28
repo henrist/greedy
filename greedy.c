@@ -339,6 +339,7 @@ int main(int argc, char *argv[])
 {
     detect_tcp_notsent_capability();
     signal(SIGINT, int_handler);
+    signal(SIGPIPE, SIG_IGN);
     parse_arg(argc, argv);
 
     buffer = malloc(buffer_size);
