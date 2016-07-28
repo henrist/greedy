@@ -16,7 +16,6 @@
 #define DEFAULT_REPORT_MS 100
 #define DEFAULT_BUF_SIZE 4096
 
-
 char *buffer;
 int buffer_size = DEFAULT_BUF_SIZE;
 int exit_program = 0;
@@ -29,8 +28,15 @@ enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
 int portno;
 int report_ms = DEFAULT_REPORT_MS;
 int tcp_notsent_capability = 0;
-int total_bytes = 0;
+long long total_bytes = 0;
+long long total_bytes_buf = 0;
 int verbose = 0;
+
+struct bytes_report {
+    float val;
+    char suffix[4];
+    char repr[50];
+};
 
 void logging_thread_run(void *arg);
 
@@ -126,11 +132,58 @@ void set_tcp_nodelay(int sockfd) {
     }
 }
 
+void get_bytes_format(long long value, struct bytes_report *br, int align) {
+    char fmt[20];
+    br->val = value;
+
+    if (br->val > 1024) {
+        if (br->val > 1024) {
+            br->val /= 1024;
+            strcpy(br->suffix, "kb");
+        }
+
+        if (br->val > 1024) {
+            br->val /= 1024;
+            strcpy(br->suffix, "mb");
+        }
+
+        if (br->val > 1024) {
+            br->val /= 1024;
+            strcpy(br->suffix, "gb");
+        }
+
+        if (align > 0) {
+            sprintf(fmt, "%%%d.3f %%s", align-3);
+        } else {
+            sprintf(fmt, "%%.3f %%s");
+        }
+
+        sprintf(br->repr, fmt, br->val, br->suffix);
+    }
+
+    else {
+        strcpy(br->suffix, "b");
+
+        if (align > 0) {
+            sprintf(fmt, "%%%d.0f      %%s", align-7);
+        } else {
+            sprintf(fmt, "%%.0f %%s");
+        }
+
+        sprintf(br->repr, fmt, br->val, br->suffix);
+    }
+}
+
 void report_closed() {
     if (total_bytes > 0) {
-        printf("finished, a total number of %d kbytes was %s\n",
-            total_bytes/1024,
-            mode == MODE_SERVER ? "written" : "read");
+        struct bytes_report br;
+        get_bytes_format(total_bytes, &br, 0);
+
+        printf("finished, a total number of %s was %s, %.2f %% of %s buffer used\n",
+            br.repr,
+            mode == MODE_SERVER ? "written" : "read",
+            (float) total_bytes / (float) total_bytes_buf * 100,
+            mode == MODE_SERVER ? "write" : "read");
     }
 }
 
@@ -171,8 +224,15 @@ void run_client() {
     //bzero(buffer, buffer_size);
     do {
         read_bytes = read(sockfd, buffer, buffer_size);
+
         if (read_bytes > 0) {
+            if (verbose >= 3) {
+                printf(".");
+            }
             total_bytes += read_bytes;
+            total_bytes_buf += buffer_size;
+        } else if (verbose >= 3) {
+            printf("x");
         }
     } while (read_bytes > 0 && !exit_program);
 
@@ -238,12 +298,15 @@ void run_server() {
         //bzero(buffer, buffer_size);
         do {
             wrote_bytes = write(sockfd, buffer, buffer_size);
-            if (verbose >= 3) {
-                printf(".");
-            }
 
             if (wrote_bytes > 0) {
+                if (verbose >= 3) {
+                    printf(".");
+                }
                 total_bytes += wrote_bytes;
+                total_bytes_buf += buffer_size;
+            } else if (verbose >= 3) {
+                printf("x");
             }
         } while (wrote_bytes > 0 && !exit_program);
 
@@ -297,10 +360,12 @@ int main(int argc, char *argv[])
 void logging_thread_run(void *arg)
 {
     int sockfd = *((int *) arg);
-    int last = 0;
+    long long last = 0;
     struct timespec sleeptime;
     sleeptime.tv_sec = 0;
     sleeptime.tv_nsec = report_ms * 1000000;
+    struct bytes_report br;
+
 
     while (1) {
         nanosleep(&sleeptime, NULL);
@@ -311,9 +376,11 @@ void logging_thread_run(void *arg)
 
         int in_flight = info.tcpi_unacked - (info.tcpi_sacked + info.tcpi_lost) + info.tcpi_retrans;
 
-        printf("%-5s %6d kb, in_flight=%8d p, lost=%5d, snd_cwnd=%8d, buffer=%8d\n",
+        get_bytes_format(total_bytes-last, &br, 10);
+
+        printf("%-5s %s, in_flight=%8d p, lost=%5d, snd_cwnd=%8d, notsent_bytes=%8d\n",
             mode == MODE_SERVER ? "wrote" : "read",
-            (total_bytes-last)/1024,
+            br.repr,
             in_flight,
             info.tcpi_lost,
             info.tcpi_snd_cwnd,
