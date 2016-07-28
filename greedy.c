@@ -50,7 +50,7 @@ void print_usage(char *argv[]) {
         "Options:\n"
         "  -b n  buffer size in bytes to read/write call (default: %d)\n"
         "  -r    keep server running when client disconnect\n"
-        "  -t n  report every n milliseconds, implies -vvv (default: %d)\n"
+        "  -t n  report every n milliseconds, implies -vv (default: %d)\n"
         "  -v    verbose output (more verbose if multiple -v)\n",
         argv[0],
         argv[0],
@@ -74,7 +74,9 @@ void parse_arg(int argc, char *argv[]) {
                 break;
             case 't':
                 report_ms = atoi(optarg);
-                verbose = 3;
+                if (verbose < 2) {
+                    verbose = 2;
+                }
                 break;
             case 'v':
                 verbose += 1;
