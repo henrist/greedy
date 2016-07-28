@@ -163,6 +163,12 @@ void run_server() {
         exit(1);
     }
 
+    int enable = 1;
+    if (setsockopt(listen_sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+        fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
+        exit(1);
+    }
+
     bzero((char *) &serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
