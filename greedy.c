@@ -363,10 +363,10 @@ void logging_thread_run(void *arg)
     int sockfd = *((int *) arg);
     long long last = 0;
     struct timespec sleeptime;
-    sleeptime.tv_sec = 0;
-    sleeptime.tv_nsec = report_ms * 1000000;
     struct bytes_report br;
 
+    sleeptime.tv_sec = report_ms / 1000;
+    sleeptime.tv_nsec = (report_ms % 1000) * 1000000;
 
     while (1) {
         nanosleep(&sleeptime, NULL);
