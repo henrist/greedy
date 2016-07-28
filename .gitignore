@@ -1,4 +1,2 @@
-client
-client.o
-server
-server.o
+greedy
+greedy.h

@@ -2,16 +2,13 @@ CC=gcc
 CFLAGS=-I.
 
 
-%.o: %.c common.h
+%.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-all: client server
+all: greedy
 
-client: client.o
-	gcc -pthread -o $@ $^ $(CFLAGS)
-
-server: server.o
+greedy: greedy.o
 	gcc -pthread -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -rf client client.o server server.o
+	rm -rf greedy greedy.o
