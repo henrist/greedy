@@ -26,9 +26,9 @@ int listen_sockfd = -1;
 int log_running = 0;
 pthread_t log_thread;
 enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
-int new_tcp = 0;
 int portno;
 int report_ms = DEFAULT_REPORT_MS;
+int tcp_notsent_capability = 0;
 int total_bytes = 0;
 int verbose = 0;
 
@@ -260,20 +260,21 @@ void run_server() {
     }
 }
 
-void detect_new_tcp() {
+void detect_tcp_notsent_capability() {
     struct utsname unamedata;
     int v1, v2;
 
+    // tcp_info.tcpi_notsent_bytes is available since Linux 4.6
     if (uname(&unamedata) == 0 && sscanf(unamedata.release, "%d.%d.", &v1, &v2) == 2) {
         if (v1 > 4 || (v1 == 4 && v2 >= 6)) {
-            new_tcp = 1;
+            tcp_notsent_capability = 1;
         }
     }
 }
 
 int main(int argc, char *argv[])
 {
-    detect_new_tcp();
+    detect_tcp_notsent_capability();
     signal(SIGINT, int_handler);
     parse_arg(argc, argv);
 
@@ -316,7 +317,7 @@ void logging_thread_run(void *arg)
             in_flight,
             info.tcpi_lost,
             info.tcpi_snd_cwnd,
-            new_tcp ? info.tcpi_notsent_bytes : -1);
+            tcp_notsent_capability ? info.tcpi_notsent_bytes : -1);
 
         last = total_bytes;
     }
