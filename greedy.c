@@ -379,13 +379,39 @@ void logging_thread_run(void *arg)
 
         get_bytes_format(total_bytes-last, &br, 12);
 
-        printf("%-5s %s, in_flight=%8d p, lost=%5d, snd_cwnd=%8d, notsent_bytes=%8d\n",
-            mode == MODE_SERVER ? "wrote" : "read",
-            br.repr,
-            in_flight,
-            info.tcpi_lost,
+        printf("%s %s",
+            mode == MODE_SERVER ? "w" : "r",
+            br.repr);
+
+        printf(" rtt=%7.2f/%5.2f in_flight=%5d",
+            (double) info.tcpi_rtt/1000,
+            (double) info.tcpi_rttvar/1000,
+            in_flight);
+
+        if (info.tcpi_lost == 0) {
+            printf(" lost=%5s", "-");
+        } else {
+            printf(" lost=%5u", info.tcpi_lost);
+        }
+
+        printf(" rto=%7.2f", (double) info.tcpi_rto / 1000);
+
+        printf(" cwnd=%6d retrans=%3u/%u",
             info.tcpi_snd_cwnd,
-            tcp_notsent_capability ? info.tcpi_notsent_bytes : -1);
+            info.tcpi_retrans,
+            info.tcpi_total_retrans);
+
+        if (tcp_notsent_capability) {
+            printf(" notsent=%8d b", info.tcpi_notsent_bytes);
+        }
+
+        if (info.tcpi_options & TCPI_OPT_ECN)
+            printf(" ecn");
+
+        if (info.tcpi_options & TCPI_OPT_ECN_SEEN)
+            printf(" ecnseen");
+
+        printf("\n");
 
         last = total_bytes;
     }
