@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <linux/tcp.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -374,7 +375,10 @@ void logging_thread_run(void *arg)
 
         struct tcp_info info;
         int len = sizeof(struct tcp_info);
-        getsockopt(sockfd, IPPROTO_TCP, TCP_INFO, &info, &len);
+        if (getsockopt(sockfd, IPPROTO_TCP, TCP_INFO, &info, &len) != 0) {
+            fprintf(stderr, "getsockopt() failed when trying to generate stats, errno: %d\n", errno);
+            break;
+        }
 
         int in_flight = info.tcpi_unacked - (info.tcpi_sacked + info.tcpi_lost) + info.tcpi_retrans;
 
