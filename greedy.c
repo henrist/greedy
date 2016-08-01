@@ -29,6 +29,8 @@ pthread_t log_thread;
 enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
 int portno;
 int report_ms = DEFAULT_REPORT_MS;
+int syscall_started;
+int syscall_finished;
 int tcp_notsent_capability = 0;
 long long total_bytes;
 long long total_bytes_buf;
@@ -223,21 +225,25 @@ void run_client() {
         start_logger(sockfd);
     }
 
+    syscall_started = 0;
+    syscall_finished = 0;
     total_bytes = 0;
     total_bytes_buf = 0;
 
     //bzero(buffer, buffer_size);
     do {
+        syscall_started++;
         read_bytes = read(sockfd, buffer, buffer_size);
+        syscall_finished++;
 
         if (read_bytes > 0) {
-            if (verbose >= 3) {
+            if (verbose >= 4) {
                 printf(".");
             }
             total_bytes += read_bytes;
             total_bytes_buf += buffer_size;
         } else if (verbose >= 3) {
-            printf("x");
+            printf("  read=0  ");
         }
     } while (read_bytes > 0 && !exit_program);
 
@@ -300,21 +306,25 @@ void run_server() {
             start_logger(sockfd);
         }
 
+        syscall_started = 0;
+        syscall_finished = 0;
         total_bytes = 0;
         total_bytes_buf = 0;
 
         //bzero(buffer, buffer_size);
         do {
+            syscall_started++;
             wrote_bytes = write(sockfd, buffer, buffer_size);
+            syscall_finished++;
 
             if (wrote_bytes > 0) {
-                if (verbose >= 3) {
+                if (verbose >= 4) {
                     printf(".");
                 }
                 total_bytes += wrote_bytes;
                 total_bytes_buf += buffer_size;
             } else if (verbose >= 3) {
-                printf("x");
+                printf("  write=0  ");
             }
         } while (wrote_bytes > 0 && !exit_program);
 
@@ -369,7 +379,10 @@ int main(int argc, char *argv[])
 void logging_thread_run(void *arg)
 {
     int sockfd = (intptr_t) arg;
-    long long last = 0;
+    long long prev_total_bytes = 0;
+    int prev_syscall_finished = 0;
+    long long cur_total_bytes;
+    int cur_syscall_finished;
     struct timespec sleeptime;
     struct bytes_report br;
 
@@ -388,10 +401,17 @@ void logging_thread_run(void *arg)
 
         int in_flight = info.tcpi_unacked - (info.tcpi_sacked + info.tcpi_lost) + info.tcpi_retrans;
 
-        get_bytes_format(total_bytes-last, &br, 12);
+        int syscall_in_progress = syscall_finished != syscall_started;
+        cur_total_bytes = total_bytes;
+        cur_syscall_finished = syscall_finished;
 
-        printf("%s %s",
-            mode == MODE_SERVER ? "w" : "r",
+        get_bytes_format(cur_total_bytes - prev_total_bytes, &br, 12);
+
+        printf("%4d%s %s",
+            cur_syscall_finished - prev_syscall_finished,
+            mode == MODE_SERVER
+                ? (syscall_in_progress ? "W" : "w")
+                : (syscall_in_progress ? "R" : "r"),
             br.repr);
 
         printf(" rtt=%7.2f/%5.2f in_flight=%5d",
@@ -424,6 +444,7 @@ void logging_thread_run(void *arg)
 
         printf("\n");
 
-        last = total_bytes;
+        prev_total_bytes = cur_total_bytes;
+        prev_syscall_finished = cur_syscall_finished;
     }
 }
