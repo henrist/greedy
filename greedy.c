@@ -30,8 +30,8 @@ enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
 int portno;
 int report_ms = DEFAULT_REPORT_MS;
 int tcp_notsent_capability = 0;
-long long total_bytes = 0;
-long long total_bytes_buf = 0;
+long long total_bytes;
+long long total_bytes_buf;
 int verbose = 0;
 
 struct bytes_report {
@@ -223,6 +223,9 @@ void run_client() {
         start_logger(sockfd);
     }
 
+    total_bytes = 0;
+    total_bytes_buf = 0;
+
     //bzero(buffer, buffer_size);
     do {
         read_bytes = read(sockfd, buffer, buffer_size);
@@ -296,6 +299,9 @@ void run_server() {
         if (verbose >= 2) {
             start_logger(sockfd);
         }
+
+        total_bytes = 0;
+        total_bytes_buf = 0;
 
         //bzero(buffer, buffer_size);
         do {
