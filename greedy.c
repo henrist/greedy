@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,7 +111,7 @@ void parse_arg(int argc, char *argv[]) {
 
 void start_logger(int sockfd) {
     int pret;
-    pret = pthread_create(&log_thread, NULL, (void *) &logging_thread_run, &sockfd);
+    pret = pthread_create(&log_thread, NULL, (void *) &logging_thread_run, (void *) (intptr_t) sockfd);
     if (pret != 0) {
         fprintf(stderr, "Could not create logging thread\n");
     } else {
@@ -360,7 +361,7 @@ int main(int argc, char *argv[])
 
 void logging_thread_run(void *arg)
 {
-    int sockfd = *((int *) arg);
+    int sockfd = (intptr_t) arg;
     long long last = 0;
     struct timespec sleeptime;
     struct bytes_report br;
