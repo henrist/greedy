@@ -13,8 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DEFAULT_REPORT_MS 100
-#define DEFAULT_BUF_SIZE 4096
+#define DEFAULT_REPORT_MS 250
+#define DEFAULT_BUF_SIZE 524288
 
 char *buffer;
 int buffer_size = DEFAULT_BUF_SIZE;
