@@ -27,6 +27,7 @@ int listen_sockfd = -1;
 int log_running = 0;
 pthread_t log_thread;
 enum { MODE_CLIENT, MODE_SERVER } mode = MODE_CLIENT;
+int nonblock = 1;
 int portno;
 int report_ms = DEFAULT_REPORT_MS;
 int syscall_started;
@@ -61,7 +62,8 @@ void print_usage(char *argv[]) {
         "  -b n  buffer size in bytes to read/write call (default: %d)\n"
         "  -r    keep server running when client disconnect\n"
         "  -t n  report every n milliseconds, implies -vv (default: %d)\n"
-        "  -v    verbose output (more verbose if multiple -v)\n",
+        "  -v    verbose output (more verbose if multiple -v)\n"
+        "  -w    block on tcp send\n",
         argv[0],
         argv[0],
         DEFAULT_BUF_SIZE,
@@ -71,7 +73,7 @@ void print_usage(char *argv[]) {
 void parse_arg(int argc, char *argv[]) {
     int opt;
 
-    while ((opt = getopt(argc, argv, "b:rst:v")) != -1) {
+    while ((opt = getopt(argc, argv, "b:rst:vw")) != -1) {
         switch (opt) {
             case 'b':
                 buffer_size = atoi(optarg);
@@ -90,6 +92,9 @@ void parse_arg(int argc, char *argv[]) {
                 break;
             case 'v':
                 verbose += 1;
+                break;
+            case 'w':
+                nonblock = 0;
                 break;
             default:
                 print_usage(argv);
@@ -312,21 +317,47 @@ void run_server() {
         total_bytes_buf = 0;
 
         //bzero(buffer, buffer_size);
-        do {
+        struct timespec sleeptime;
+        sleeptime.tv_sec = 0;
+
+        int zerosends = 0;
+        int backoff;
+        while (!exit_program) {
             syscall_started++;
-            wrote_bytes = write(sockfd, buffer, buffer_size);
+            wrote_bytes = send(sockfd, buffer, buffer_size, nonblock ? MSG_DONTWAIT : 0);
             syscall_finished++;
 
-            if (wrote_bytes > 0) {
-                if (verbose >= 4) {
-                    printf(".");
+            if (wrote_bytes == 0) {
+                fprintf(stderr, "unexpected send of 0 bytes\n");
+                break;
+            } else if (wrote_bytes < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    zerosends++;
+
+                    backoff = zerosends * 10; // base of 10 ms
+                    if (backoff >= 1000) backoff = 999;
+                    sleeptime.tv_nsec = backoff * 1000000;
+
+                    if (verbose >= 4) {
+                        printf("  send=0, backoff=%d  ", backoff);
+                    }
+
+                    nanosleep(&sleeptime, NULL);
+                    continue;
+                } else {
+                    fprintf(stderr, "send failed with errno: %d\n", errno);
+                    break;
                 }
-                total_bytes += wrote_bytes;
-                total_bytes_buf += buffer_size;
-            } else if (verbose >= 3) {
-                printf("  write=0  ");
             }
-        } while (wrote_bytes > 0 && !exit_program);
+
+            zerosends = 0;
+            total_bytes += wrote_bytes;
+            total_bytes_buf += buffer_size;
+
+            if (verbose >= 4) {
+                printf(".");
+            }
+        }
 
         if (verbose) {
             report_closed();
