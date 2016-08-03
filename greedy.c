@@ -316,10 +316,10 @@ void run_server() {
         total_bytes = 0;
         total_bytes_buf = 0;
 
-        //bzero(buffer, buffer_size);
         struct timespec sleeptime;
         sleeptime.tv_sec = 0;
 
+        bzero(buffer, buffer_size);
         int zerosends = 0;
         int backoff;
         while (!exit_program) {
