@@ -416,17 +416,18 @@ void logging_thread_run(void *arg)
     int cur_syscall_finished;
     struct timespec sleeptime;
     struct bytes_report br;
+    int s_rcv, s_snd, len;
 
     sleeptime.tv_sec = report_ms / 1000;
     sleeptime.tv_nsec = (report_ms % 1000) * 1000000;
 
-    while (1) {
-        nanosleep(&sleeptime, NULL);
+    printf("stats: reports every %d ms, sb = SO_SNDBUF, rb = SO_RCVBUF\n", report_ms);
 
+    while (1) {
         struct tcp_info info;
-        int len = sizeof(struct tcp_info);
+        len = sizeof(struct tcp_info);
         if (getsockopt(sockfd, IPPROTO_TCP, TCP_INFO, &info, &len) != 0) {
-            fprintf(stderr, "getsockopt() failed when trying to generate stats, errno: %d\n", errno);
+            fprintf(stderr, "getsockopt(TCP_INFO) failed, errno: %d\n", errno);
             break;
         }
 
@@ -437,6 +438,18 @@ void logging_thread_run(void *arg)
         cur_syscall_finished = syscall_finished;
 
         get_bytes_format(cur_total_bytes - prev_total_bytes, &br, 12);
+
+        len = sizeof(s_rcv);
+        if (getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &s_rcv, &len) < 0) {
+            fprintf(stderr, "getsockopt(SO_RCVBUF) failed");
+            break;
+        }
+
+        len = sizeof(s_snd);
+        if (getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &s_snd, &len) < 0) {
+            fprintf(stderr, "getsockopt(SO_SNDBUF) failed");
+            break;
+        }
 
         printf("%4d%s %s",
             cur_syscall_finished - prev_syscall_finished,
@@ -473,9 +486,12 @@ void logging_thread_run(void *arg)
         if (info.tcpi_options & TCPI_OPT_ECN_SEEN)
             printf(" ecnseen");
 
+        printf(" rb=%d sb=%d", s_rcv, s_snd);
+
         printf("\n");
 
         prev_total_bytes = cur_total_bytes;
         prev_syscall_finished = cur_syscall_finished;
+        nanosleep(&sleeptime, NULL);
     }
 }
