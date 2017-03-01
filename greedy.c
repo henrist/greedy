@@ -422,6 +422,7 @@ void logging_thread_run(void *arg)
     sleeptime.tv_nsec = (report_ms % 1000) * 1000000;
 
     printf("stats: reports every %d ms, sb = SO_SNDBUF, rb = SO_RCVBUF\n", report_ms);
+    printf("R = RTT, F = packets in flight, L = loss, W = window size\n");
 
     while (1) {
         struct tcp_info info;
@@ -458,33 +459,33 @@ void logging_thread_run(void *arg)
                 : (syscall_in_progress ? "R" : "r"),
             br.repr);
 
-        printf(" rtt=%7.2f/%5.2f in_flight=%5d",
+        printf(" R=%7.2f/%5.2f F=%5d",
             (double) info.tcpi_rtt/1000,
             (double) info.tcpi_rttvar/1000,
             in_flight);
 
         if (info.tcpi_lost == 0) {
-            printf(" lost=%5s", "-");
+            printf(" L=%5s", "-");
         } else {
-            printf(" lost=%5u", info.tcpi_lost);
+            printf(" L=%5u", info.tcpi_lost);
         }
 
         printf(" rto=%7.2f", (double) info.tcpi_rto / 1000);
 
-        printf(" cwnd=%6d retrans=%3u/%u",
+        printf(" W=%5d retrans=%3u/%u",
             info.tcpi_snd_cwnd,
             info.tcpi_retrans,
             info.tcpi_total_retrans);
 
         if (tcp_notsent_capability) {
-            printf(" notsent=%8d b", info.tcpi_notsent_bytes);
+            printf(" notsent=%7d b", info.tcpi_notsent_bytes);
         }
 
         if (info.tcpi_options & TCPI_OPT_ECN)
             printf(" ecn");
 
         if (info.tcpi_options & TCPI_OPT_ECN_SEEN)
-            printf(" ecnseen");
+            printf("S");
 
         printf(" rb=%d sb=%d", s_rcv, s_snd);
 
