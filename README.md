@@ -73,3 +73,13 @@ E.g. to be able to get a window of 2000 packets:
 sysctl -w net.ipv4.tcp_rmem='4096 87380 5792000'
 sysctl -w net.ipv4.tcp_wmem='4096 16384 8688000'
 ```
+
+## Troubleshooting
+
+### Error about `struct tcp_info` when compiling
+
+Drop [tcp.h](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/uapi/linux/tcp.h)
+into a subfolder you name `linux` and try again.
+
+The error is because you probably have a too old uapi include header in your
+system.
